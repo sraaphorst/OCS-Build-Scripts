@@ -104,6 +104,9 @@ function appVersionSetup() {
     local BUILD_FILE_SRC="$OCS_BASE_PATH"/build.sbt
     local BUILD_FILE_DST="$OCS_BASE_PATH"/build_tmp.sbt
 
+    # Convert APP into a build ID string, i.e. either ocsVersion or pitVersion.
+    local APPSET_BUILD_ID=`echo "$APPSET" | tr [:upper:] [:lower:]`Version
+
     if [[ -z "$VERSION_APPSET_STRING" ]]; then
 	logWarn "No versioning info provided for $APPSET"
     else
@@ -114,9 +117,6 @@ function appVersionSetup() {
 	    exit 1
 	fi
 	verbose "$APPSET version tuple: $VERSION_APPSET_TUPLE"
-	
-	# Convert APP into a build ID string, i.e. either ocsVersion or pitVersion.
-	local APPSET_BUILD_ID=`echo "$APPSET" | tr [:upper:] [:lower:]`Version
 	
         # Substitute it into build.sbt to a temp file, and then move the temp file back to build.sbt.
 	sed "s/^${APPSET_BUILD_ID}.*/${APPSET_BUILD_ID} in ThisBuild := ${VERSION_APPSET_TUPLE}/" < "$BUILD_FILE_SRC" > "$BUILD_FILE_DST"
