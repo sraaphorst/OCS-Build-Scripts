@@ -24,6 +24,9 @@ function showHelp() {
 }
 
 
+# Automatically suppress building SPDB since we don't care.
+SUPPRESS_spdb=TRUE
+
 # Command line arguments.
 while :
 do
@@ -41,14 +44,14 @@ do
 	    shift
 	    ;;
 	-NO) shift
-	    SUPPRESS_OT=TRUE
+	    SUPPRESS_ot=TRUE
 	    ;;
 	-NQ) shift
-	    SUPPRESS_QPT=TRUE
+	    SUPPRESS_qpt=TRUE
 	    ;;
 	-NP) shift
-	    SUPPRESS_PIT=TRUE
-	    SUPPRESS_P1PDF=TRUE
+	    SUPPRESS_pit=TRUE
+	    SUPPRESS_p1pdfmaker=TRUE
 	    ;;
 	-NC) shift
 	    SUPPRESS_OBSCONSOLES=TRUE
@@ -286,29 +289,28 @@ function installDistros() {
 	for app_pkg in ${SSH_PACKAGES[@]}; do
 	    local SSH_PATH_VAR=SSH_PATH_${app_pkg}
 
-	    ssh "$SSH_CONNECT" "mkdir -p ${!SSH_PATH_VAR}" 2>&1 > /dev/null
-	    if [[ $? -ne 0 ]]; then
-		logError "Could not create ${!SSH_PATH_VAR}."
-		exit 1
-	    fi
-
 	    # Now for app_pkg, iterate over the APPS_${app_pkg} apps
-	    logInfo "Copying distribution $app_pkg to ${SSH_CONNECT}:${!SSH_PATH_VAR}"
 	    local APPS_VAR=APPS_${app_pkg}[@]
 	    for app in ${!APPS_VAR}; do
-		verbose "Copying $app"
 		local DIST_FILES_VAR=DIST_FILES_$app[@]
 
 		for distfile in ${!DIST_FILES_VAR}; do
-		    verbose "Copying $distfile"
+		    logInfo "Copying $distfile from package $app_pkg and application $app to ${SSH_CONNECT}:${!SSH_PATH_VAR}"
+
+		    # Do the directory creation here so that if no distributions were prepared, we don't create an empty directory.
+		    ssh "$SSH_CONNECT" "mkdir -p ${!SSH_PATH_VAR}" 2>&1 > /dev/null
+		    if [[ $? -ne 0 ]]; then
+			logError "Could not create ${!SSH_PATH_VAR}."
+			exit 1
+		    fi
+
 		    scp "$distfile" "$SSH_CONNECT":"${!SSH_PATH_VAR}" 2>&1 > /dev/null
 		    if [[ $? -ne 0 ]]; then
-			logError "Could not copy file ${distfile} to ${SSH_CONNECT}:${!SSH_PATH_VAR}"
+			logError "Could not copy file $distfile to ${SSH_CONNECT}:${!SSH_PATH_VAR}"
 			exit 1
 		    fi
 		done
 	    done
-	    logInfo "Copying distribution $app_pkg to ${SSH_CONNECT}:${!SSH_PATH} complete."
 	done
     done
     logInfo "Installing distributions complete."
