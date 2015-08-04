@@ -79,7 +79,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z ${SERVERS[@]} ]]; then
-    SERVERS=(gsodbtest gnodbtest)
+    SERVERS=(gsodbtest2 gnodbtest2)
     DISTS=(gsodbtest gnodbtest)
     SOURCE_SERVERS=(gsodb gnodb)
     MOUNT_POINTS=(petrohue wikiwiki)
@@ -393,7 +393,7 @@ function stopServer() {
 	fi
 
 	verbose "Telnetting to stop server..."
-	(echo "stop 0"; echo "quit") | telnet "$SERVER" 8224
+	echo "stop 0" | ncat "$SERVER" 8224
 	sleep 5
     done
 
@@ -470,14 +470,14 @@ function startServer() {
     local SSH_CONNECT="${SSH_USER}@${SERVER}"
 
     # Get the name of the executable.
-    local REMOTE_SPDB_CMD=`ssh "$SSH_CONNECT" "cd $REMOTE_SPDB_PATH && ls spdb_* && tail -n 1" | sed "s/\*$//"`
+    local REMOTE_SPDB_CMD=`ssh "$SSH_CONNECT" "cd $REMOTE_SPDB_PATH && ls spdb_* | tail -n 1" | sed "s/\*$//"`
     if [[ -z "$REMOTE_SPDB_CMD" ]]; then
 	logError "startServer: could not determine remote SPDB executable."
 	return 1
     fi
 
     # Start it.
-    ssh "$SSH_CONNECT" "cd $REMOTE_SPDB_PATH && nohup ./$REMOTE_SPDB_CMD > sysout.txt 2>&1 &"
+    ssh "$SSH_CONNECT" "cd $REMOTE_SPDB_PATH && nohup ./$REMOTE_SPDB_CMD > sysout.txt 2>&1"
     if [[ $? -ne 0 ]]; then
 	logError "startServer: could not start server."
 	return 1
@@ -501,7 +501,7 @@ function importXml() {
     fi
 
     logInfo "Importing XML backup to $SERVER"
-    (echo "importXml $BACKUP_PATH") | telnet "$SERVER" 8224
+    echo "importXml $BACKUP_PATH" | ncat "$SERVER" 8224
     if [[ $? -ne 0 ]]; then
 	logError "importXml: could not run importXml on $SERVER for path $BACKUP_PATH"
 	return 1
@@ -514,7 +514,6 @@ function importXml() {
 
 function processServers() {
     local NUM_SERVERS=${#SERVERS[@]}
-    NUM_SERVERS=1
     for (( i=0; i<${NUM_SERVERS}; i++ )); do
 	local SERVER="${SERVERS[$i]}"
 	local DIST="${DISTS[$i]}"
