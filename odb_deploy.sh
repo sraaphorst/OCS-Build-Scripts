@@ -331,7 +331,7 @@ function fetchLatestBackup() {
 
     local SSH_SOURCE_CONNECT="${SSH_USER}@${SOURCE_SERVER}"
     local SSH_SOURCE_PATH="/mount/${MOUNT_POINT}/odbhome/ugemini/spdb/spdb.archive/archive"
-    local LATEST_FILE=`ssh ${SSH_SOURCE_CONNECT} "ls ${SSH_SOURCE_PATH} | tail -n 1"`
+    local LATEST_FILE=`ssh ${SSH_SOURCE_CONNECT} "ls ${SSH_SOURCE_PATH} | grep zip | tail -n 1"`
     if [[ $? -ne 0 ]]; then
 	logError "fetchLatestBackup: could not complete ssh command to determine latest backup filename."
 	return 1
