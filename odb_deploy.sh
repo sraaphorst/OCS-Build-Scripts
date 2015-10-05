@@ -67,6 +67,13 @@ while [[ $# -gt 0 ]]; do
 	showHelp
 	exit 1
     fi
+    DISTS+=("$1")
+    shift
+    
+    if [[ -z "$1" ]]; then
+	showHelp
+	exit 1
+    fi
     SOURCE_SERVERS+=("$1")
     shift
 
