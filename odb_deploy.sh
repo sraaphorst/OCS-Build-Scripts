@@ -363,8 +363,6 @@ function fetchLatestBackup() {
     logInfo "Unzipping and removing the backup file."
     local BACKUP_DIRNAME=`echo $LATEST_FILE | sed "s/\.zip//"`
     BACKUP_PATH=`ssh "${SSH_CONNECT}" "cd ${SSH_DEST_PATH} && unzip -o ${LATEST_FILE} 2>&1 > /dev/null && rm -f ${LATEST_FILE} && cd $BACKUP_DIRNAME && pwd"`
-    echo "BACKUP_DIRNAME=$BACKUP_DIRNAME"
-    echo "BACKUP_PATH=$BACKUP_PATH"
     if [[ $? -ne 0 ]]; then
 	logError "fetchLatestBackup: could not unzip the backup file on the server."
 	return 1
@@ -447,9 +445,6 @@ cd $SSH_KEY_PATH
 mkdir -p $KEY_DIR_NEW
 cp -r $KEY_DIR_OLD/keyserver $KEY_DIR_OLD/vcs* $KEY_DIR_NEW/"
 
-# TODO: REMOVE ECHO
-echo ${CONSOLE_SCRIPT}
-
         # Execute the key copy script.
 	ssh "$SSH_CONNECT" "$CONSOLE_SCRIPT"
 	if [[ $? -ne 0 ]]; then
@@ -483,15 +478,16 @@ function startServer() {
 	return 1
     fi
 
-    # Start it.
-    ssh "$SSH_CONNECT" "cd $REMOTE_SPDB_PATH && nohup ./$REMOTE_SPDB_CMD > sysout.txt 2>&1"
+    # Start it, but do so in the background. This is because for some odd reason, the ssh command
+    # does not always return here.
+    ssh -f "$SSH_CONNECT" "cd $REMOTE_SPDB_PATH && ./$REMOTE_SPDB_CMD > sysout.txt 2>&1 &"
     if [[ $? -ne 0 ]]; then
-	logError "startServer: could not start server."
-	return 1
+	logWarning "startServer: could not confirm that server started."
     fi
 
-    logInfo "Waiting 20 seconds for $SERVER to complete startup."
-    sleep 20
+    # We need to wait long enough for the database to come up.
+    logInfo "Waiting 60 seconds for $SERVER to complete startup."
+    sleep 60
     logInfo "Attempting to start server $SERVER complete."
     return 0
 }

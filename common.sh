@@ -5,6 +5,8 @@ source genfuncs.sh
 source logging.sh
 source verfuncs.sh
 
+# This causes problems so unset.
+unset LC_CTYPE
 
 # Set up the requisite paths.
 DEV_BASE_PATH=`absPath ${DEV_BASE_PATH:-"$HOME/dev"}`
