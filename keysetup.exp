@@ -1,0 +1,43 @@
+#!/usr/bin/env expect
+
+# *** FILL OUT TELOPS PASSWORD ***
+set telopsUser "telops"
+set telopsPassword ""
+set telopsServers { "gsconfig" "gnconfig" "sbfcon02" "hbfcon03" }
+
+# *** FILL OUT SOFTWARE PASSWORD ***
+set softwareUser "software"
+set softwarePassword ""
+set softwareServers { "gsodbtest2" "gnodbtest2" "gsodb" "gnodb" }
+
+set timeout 30
+log_user 0
+
+proc checkPassword { password msg exitCode } {
+    if {$password eq ""} {
+	send_user $msg
+	exit $exitCode
+    }
+}
+checkPassword $telopsPassword   "telops password must be filled out in keysetup.exp."  1
+checkPassword $softwarePassword "software password must be filled out in keysetup.exp" 2
+
+
+proc sshCopyID { username password server } {
+    send_user "Attempting to set up key for ${username}@${server}...\n"
+    spawn ssh-copy-id $username@$server
+    expect {
+	timeout     { send_user "Failed to get password prompt.\n"; exit 3 }
+	eof         { send_user "ssh failure\n"; exit 4 }
+	"*password" { send "$password\r" }
+	"*system."  { send_user "ssh id is already configured.\n" }
+	"Warning*"  { send_user "RSA host key differs from key for IP address. Please fix this and rerun.\n"; exit 5 }
+    }
+}
+
+foreach server $telopsServers {
+    sshCopyID $telopsUser $telopsPassword $server
+}
+foreach server $softwareServers {
+    sshCopyID $softwareUser $softwarePassword $server
+}
