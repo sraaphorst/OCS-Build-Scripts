@@ -271,17 +271,12 @@ function processServer() {
     fi
 
     local SERVER_STEP=$(($SERVER_NUMBER * 6))
-    echo STEP="$STEP" SERVER_STEP="$SERVER_STEP" SERVER_NUMBER="$SERVER_NUMBER"
     performStep $(($SERVER_STEP + 6)) copyDist "$SERVER" "$DIST"
     performStep $(($SERVER_STEP + 7)) fetchLatestBackup "$SERVER" "$SOURCE_SERVER" "$MOUNT_POINT"
     performStep $(($SERVER_STEP + 8)) stopServer "$SERVER"
-    echo setupKeys
     performStep $(($SERVER_STEP + 9)) setupKeys "$SERVER"
-    echo startServer
     performStep $(($SERVER_STEP + 10)) startServer "$SERVER"
-    echo importXml
     performStep $(($SERVER_STEP + 11)) importXml "$SERVER"
-    echo done
     return 0
 }
 
