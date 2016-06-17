@@ -1,17 +1,32 @@
 #!/bin/bash
 
-source appfuncs.sh
-source common.sh
-source genfuncs.sh
-source logging.sh
-source verfuncs.sh
+BASE_DIR=`dirname $0`
+source $BASE_DIR/appfuncs.sh
+source $BASE_DIR/common.sh
+source $BASE_DIR/genfuncs.sh
+source $BASE_DIR/logging.sh
+source $BASE_DIR/verfuncs.sh
+source $BASE_DIR/continuefuncs.sh
 
-declare -a SERVERS
-declare -a DISTS
-declare -a SOURCE_SERVERS
-declare -a MOUNT_POINTS
+# Variables and arrays used by this script, as declared in common.sh.
+VARIABLES=(SSH_USER VERBOSE DIRTY DIRTY_DISTROS VERSION_OCS_STRING FINISHED_SERVERS)
+ARRAYS+=(SERVERS DISTS SOURCE_SERVERS MOUNT_POINTS DIST_FILES_spdb)
 
-SSH_USER=software
+
+# *************************************************
+# ***** Check for and handle continue / abort *****
+# *************************************************
+# Note that if the script was aborted and the user opts to continue, this
+# loads up the configuration that was used in the original call to this script
+# so we can begin precisely where we left off.
+configSetup
+
+
+# ******************************************
+# ***** Handle command line parameters *****
+# ******************************************
+# Check to see if the script is fresh (i.e. did not terminate prematurely)
+# and if so, configure via the specified command line parameters.
 
 function showHelp() {
     echo "usage: odbDeploy [-h] [-v] [-d] [-b] [-o str] [server1 dist1 sourceServer1 mountPoint1 [server2 dist2 sourceServer2 mountPoint2 [...]]"
@@ -27,94 +42,120 @@ function showHelp() {
     echo "   mountPoint#:   the mount point on the corresponding sourceServer to get the DB backup (default: petrohue and wikiwiki)"
 }
 
-# Command line arguments.
-while :
-do
-    case $1 in
-	-h) showHelp
+if configExists; then
+    # Handle the continue / abort process.
+    configInterruptedHandler "$@"
+else
+    # Fresh start: configure from the command line.
+    # Handle command line arguments.
+    declare -a SERVERS
+    declare -a DISTS
+    declare -a SOURCE_SERVERS
+    declare -a MOUNT_POINTS
+    SSH_USER=software
+
+    while :
+    do
+	case $1 in
+	    -h) showHelp
+		exit 1
+		;;
+            -v) VERBOSE=TRUE
+		shift 
+		;;
+	    -d) DIRTY=TRUE
+		shift
+		;;
+	    -b) DIRTY_DISTROS=TRUE
+		shift
+		;;
+	    -o) shift
+		VERSION_OCS_STRING=$1
+		shift
+		;;
+            --) shift
+		break
+		;;
+            -*) showHelp
+		exit 1
+		;;
+	    *) break
+               ;;
+	esac
+    done
+
+    # Add the rest to the servers
+    while [[ $# -gt 0 ]]; do
+	SERVERS+=("$1")
+	shift
+	
+	if [[ -z "$1" ]]; then
+	    showHelp
 	    exit 1
-	    ;;
-        -v) VERBOSE=TRUE
-	    shift 
-	    ;;
-	-d) DIRTY=TRUE
-	    shift
-	    ;;
-	-b) DIRTY_DISTROS=TRUE
-	    shift
-	    ;;
-	-o) shift
-	    VERSION_OCS_STRING=$1
-	    shift
-	    ;;
-        --) shift
-            break
-            ;;
-        -*) showHelp
-            exit 1
-            ;;
-	 *) break
-            ;;
-    esac
-done
+	fi
+	DISTS+=("$1")
+	shift
+	
+	if [[ -z "$1" ]]; then
+	    showHelp
+	    exit 1
+	fi
+	SOURCE_SERVERS+=("$1")
+	shift
+	
+	if [[ -z "$1" ]]; then
+	    showHelp
+	    exit 1
+	fi
+	MOUNT_POINTS+=("$1")
+	shift
+    done
 
-# Add the rest to the servers
-while [[ $# -gt 0 ]]; do
-    SERVERS+=("$1")
-    shift
-
-    if [[ -z "$1" ]]; then
-	showHelp
-	exit 1
+    if [[ -z ${SERVERS[@]} ]]; then
+	SERVERS=(gsodbtest2 gnodbtest2)
+	DISTS=(gsodbtest gnodbtest)
+	SOURCE_SERVERS=(gsodb gnodb)
+	MOUNT_POINTS=(petrohue wikiwiki)
     fi
-    DISTS+=("$1")
-    shift
-    
-    if [[ -z "$1" ]]; then
-	showHelp
-	exit 1
-    fi
-    SOURCE_SERVERS+=("$1")
-    shift
 
-    if [[ -z "$1" ]]; then
-	showHelp
-	exit 1
-    fi
-    MOUNT_POINTS+=("$1")
-    shift
-done
-
-if [[ -z ${SERVERS[@]} ]]; then
-    SERVERS=(gsodbtest2 gnodbtest2)
-    DISTS=(gsodbtest gnodbtest)
-    SOURCE_SERVERS=(gsodb gnodb)
-    MOUNT_POINTS=(petrohue wikiwiki)
+    # The process has started, so write the config file.
+    writeConfig
 fi
+
 verbose "Using servers: ${SERVERS[@]}"
 verbose "Using distributions: ${DISTS[@]}"
 verbose "Using source servers: ${SOURCE_SERVERS[@]}"
 verbose "Using mount points: ${MOUNT_POINTS[@]}"
 
 
-
-# ***************************
-# ***** OCS SOURCE CODE *****
-# ***************************
-ocsSourceCodeSetup
-
+# *******************
+# ***** SSH IDS *****
+# *******************
+sshIds
 
 
-# *********************
-# ***** JRE SETUP *****
-# *********************
-jreSbtSetup
+# ************************
+# ***** JAVA VERSION *****
+# ************************
+javaVersion
 
+
+# ******************************
+# ***** 1: OCS SOURCE CODE *****
+# ******************************
+performStep 1 ocsSourceCodeSetup
+
+
+# ************************
+# ***** 2: JRE SETUP *****
+# ************************
+performStep 2 jreSbtSetup
 
 
 # *************************
 # ***** VERSION SETUP *****
 # *************************
+# Always do this as it is simply a function of the configuration.
 function versionSetup() {
     logHeader "Processing versioning."
     local BUILD_FILE_SRC="$OCS_BASE_PATH"/build.sbt
@@ -124,21 +165,21 @@ function versionSetup() {
     appVersionSetup "${APPSET_OCS}" "$OCS_BASE_PATH" "${VERSION_OCS_STRING}"
 
     logInfo "Processing versioning complete."
+    return 0
 }
 versionSetup
 
 
-# ***************************
-# ***** OCS-CREDENTIALS *****
-# ***************************
-ocsCredentialsSourceCodeSetup
+# ******************************
+# ***** 3: OCS-CREDENTIALS *****
+# ******************************
+performStep 3 ocsCredentialsSourceCodeSetup
 
 
-
-# ******************************************
-# ***** SBT PREPARATIONS AND EXECUTION *****
-# ******************************************
-sbtCompile "$DIRTY"
+# ***********************************************
+# ***** 4-5: SBT PREPARATIONS AND EXECUTION *****
+# ***********************************************
+performStep 4 sbtCompile "$DIRTY"
 
 function buildSpdb() {
     logInfo "Creating SPDB distributions."
@@ -149,7 +190,7 @@ function buildSpdb() {
 	buildApp "$APP_SPDB" "$OCS_BASE_PATH"
 	if [[ $? -ne 0 ]]; then
 	    logError "Could not run buildApp."
-	    exit 1
+	    return 1
 	fi
     fi
 
@@ -157,12 +198,13 @@ function buildSpdb() {
     findDistFiles "$APP_SPDB" "$OCS_BASE_PATH" "$VERSION_OCS"
     if [[ $? -ne 0 ]]; then
 	logError "Could not run findDistFiles."
-	exit 1
+	return 1
     fi
-    logInfo "Creating distributions complete."
-}
-buildSpdb
 
+    logInfo "Creating distributions complete."
+    return 0
+}
+performStep 5 buildSpdb
 
 
 # *******************************
@@ -175,11 +217,13 @@ buildSpdb
 # 2. The distribution.
 # 3. The source server.
 # 4. The mount point on the source server.
+# 5. The server number: used for continuation.
 function processServer() {
     local SERVER=$1
     local DIST=$2
     local SOURCE_SERVER=$3
     local MOUNT_POINT=$4
+    local SERVER_NUMBER=$5
 
     if [[ -z "$SERVER" ]]; then
 	logError "processServer: must provide a server to process."
@@ -221,36 +265,23 @@ function processServer() {
 	return 1
     fi
 
-    copyDist "$SERVER" "$DIST"
-    if [[ $? -ne 0 ]]; then
+    if [[ -z "$SERVER_NUMBER" ]]; then
+	logError "processServer: must provide the server number, indexed from 0."
 	return 1
     fi
 
-    fetchLatestBackup "$SERVER" "$SOURCE_SERVER" "$MOUNT_POINT"
-    if [[ $? -ne 0 ]]; then
-	return 1
-    fi
-
-    stopServer "$SERVER"
-    if [[ $? -ne 0 ]]; then
-	return 1
-    fi
-
-    setupKeys "$SERVER"
-    if [[ $? -ne 0 ]]; then
-	return 1
-    fi
-
-    startServer "$SERVER"
-    if [[ $? -ne 0 ]]; then
-	return 1
-    fi
-    
-    importXml "$SERVER"
-    if [[ $? -ne 0 ]]; then
-	return 1
-    fi
-
+    local SERVER_STEP=$(($SERVER_NUMBER * 6))
+    echo STEP="$STEP" SERVER_STEP="$SERVER_STEP" SERVER_NUMBER="$SERVER_NUMBER"
+    performStep $(($SERVER_STEP + 6)) copyDist "$SERVER" "$DIST"
+    performStep $(($SERVER_STEP + 7)) fetchLatestBackup "$SERVER" "$SOURCE_SERVER" "$MOUNT_POINT"
+    performStep $(($SERVER_STEP + 8)) stopServer "$SERVER"
+    echo setupKeys
+    performStep $(($SERVER_STEP + 9)) setupKeys "$SERVER"
+    echo startServer
+    performStep $(($SERVER_STEP + 10)) startServer "$SERVER"
+    echo importXml
+    performStep $(($SERVER_STEP + 11)) importXml "$SERVER"
+    echo done
     return 0
 }
 
@@ -299,10 +330,7 @@ function copyDist() {
     fi
 
     # Untar it on the server and remove the tarfile.
-    echo "DIST_FILE=$DIST_FILE"
-    echo "DIST_DIR=$DIST_DIR"
     REMOTE_SPDB_PATH=`ssh "$SSH_CONNECT" "tar xfz ${DIST_FILE} && rm -f ${DIST_FILE} && cd $DIST_DIR && pwd"`
-    echo "REMOTE_SPDB_PATH=$REMOTE_SPDB_PATH"
     if [[ $? -ne 0 ]]; then
 	logError "copyDist: could not untar $DIST_FILE on $SERVER"
 	return 1
@@ -399,7 +427,7 @@ function stopServer() {
 
 	verbose "Telnetting to stop server..."
 	echo "stop 0" | ncat "$SERVER" 8224
-	sleep 5
+	sleep 10
     done
 
     logInfo "Attempting to stop server $SERVER complete."
@@ -465,7 +493,7 @@ function startServer() {
     local SERVER="$1"
     if [[ -z "$SERVER" ]]; then
 	logError "startServer: requires a server name."
-	return 1
+        return 1
     fi
 
     logInfo "Attempting to start server $SERVER at $REMOTE_SPDB_PATH"
@@ -517,19 +545,34 @@ function importXml() {
 
 function processServers() {
     local NUM_SERVERS=${#SERVERS[@]}
-    for (( i=0; i<${NUM_SERVERS}; i++ )); do
+    if [[ -z "$FINISHED_SERVERS" ]]; then
+	FINISHED_SERVERS=0
+    fi
+
+    for (( i=$FINISHED_SERVERS; i<${NUM_SERVERS}; i++ )); do
 	local SERVER="${SERVERS[$i]}"
 	local DIST="${DISTS[$i]}"
 	local SOURCE_SERVER="${SOURCE_SERVERS[$i]}"
 	local MOUNT_POINT="${MOUNT_POINTS[$i]}"
 
 	logHeader "Processing server $SERVER for distribution $DIST using source server $SOURCE_SERVER at mount point $MOUNT_POINT"
-	processServer "${SERVERS[$i]}" "${DISTS[$i]}" "${SOURCE_SERVERS[$i]}" "${MOUNT_POINTS[$i]}"
+	processServer "$SERVER" "$DIST" "$SOURCE_SERVER" "$MOUNT_POINT" "$i"
 	if [[ $? -ne 0 ]]; then
-	    logError "processServers: could not process."
+	    logError "processServers: could not run processServer."
 	    exit 1
 	fi
+
+	# Increment the finished server and write the config to record the progression.
+	FINISHED_SERVERS=$(($FINISHED_SERVERS + 1))
+	writeConfig
 	logInfo "Processing server $SERVER complete."
     done
+    return 0
 }
 processServers
+
+
+# *******************
+# ***** Cleanup *****
+# *******************
+configCleanup

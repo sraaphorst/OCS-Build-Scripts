@@ -2,9 +2,10 @@
 # Functions and definitions to work with the different applications for
 # the distribtuion.
 
-source common.sh
-source logging.sh
-source genfuncs.sh
+BASE_DIR=`dirname $0`
+source $BASE_DIR/common.sh
+source $BASE_DIR/logging.sh
+source $BASE_DIR/genfuncs.sh
 
 APP_OT=ot
 APP_QPT=qpt
@@ -69,11 +70,11 @@ function buildApp() {
 	logError "buildApp: no OCS base path specified."
 	return 1
     fi
-    local OLD_PATH="`pwd`"
-    cd "$OCS_BASE_PATH"
+
+    pushd "$OCS_BASE_PATH" > /dev/null
     if [[ $? -ne 0 ]]; then
-	logError "buildApp: could not cd to OCS base path: $OCS_BASE_PATH"
-	exit 1
+	logError "buildApp: could not access OCS base path: $OCS_BASE_PATH"
+	return 1
     fi
 
     local DISTS_ALL_VAR=DISTS_$APP[@]
@@ -106,7 +107,7 @@ function buildApp() {
 	fi
     done
 
-    cd "$OLD_PATH"
+    popd > /dev/null
     return 0
 }
 
@@ -133,7 +134,7 @@ function findDistFiles() {
     fi
     contains "$APP" "${APPS[@]}"
     if [[ $? -ne 0 ]]; then
-	logError "findDistFiles received illegal app name: $APP_NAME"
+	logError "findDistFiles received illegal app name: $APP"
 	return 1
     fi
 
@@ -150,7 +151,7 @@ function findDistFiles() {
     fi
 
     # Clear the array.
-    eval "DIST_FILES_${APP_NAME}=()"
+    eval "DIST_FILES_${APP}=()"
 
     # Separate processing for OCS/PIT apps and SPDB.
     if [[ "$APP" == "$APP_SPDB" ]]; then

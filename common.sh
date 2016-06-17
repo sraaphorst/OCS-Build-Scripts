@@ -1,9 +1,10 @@
 #!/usr/bin/bash
-# Functions that are common to deploy and odb_deploy.
+# A number of generic functions and declarations that are common to the build scripts.
 
-source genfuncs.sh
-source logging.sh
-source verfuncs.sh
+BASE_DIR=`dirname $0`
+source $BASE_DIR/genfuncs.sh
+source $BASE_DIR/logging.sh
+source $BASE_DIR/verfuncs.sh
 
 # This causes problems so unset.
 unset LC_CTYPE
@@ -15,24 +16,59 @@ OCS_BASE_PATH=`absPath ${OCS_BASE_PATH:-"$DEV_BASE_PATH/ocs"}`
 JRE_PATH=`absPath ${JRE_PATH:-"$DEV_BASE_PATH/jres8"}`
 
 
+# ********************************
+# ***** VARIABLES AND ARRAYS *****
+# ********************************
+# Executables should add their configuration parameters to these arrays.
+# Single value variables NAME=VALUE should add NAME to VARIABLES.
+# Arrays NAME=(VALUE1 VALUE2 ...) should add NAME to ARRAYS.
+declare -a VARIABLES
+declare -a ARRAYS
+
+
+# Set up the ssh ids.
+# We use exit here instead of return as we want to terminate if this fails
+# without requiring the calling code to handle.
+function sshIds() {
+    logHeader "SSH ID setup" no
+    
+    eval "$BASE_DIR/keysetup.exp"
+    if [[ $? -ne 0 ]]; then
+	logError "Could not set up SSH IDs."
+	exit 1
+    fi
+    logInfo "SSH ID setup complete."
+    return 0
+}
+
+# setjdk always returns 0, even for failure.
+function javaVersion() {
+    logHeader "Setting JDK version"
+    setjdk 1.8.0_73
+    logInfo "JDK version set."
+    return 0
+}
+
 # Update the OCS source code.
 function ocsSourceCodeSetup() {
-    logHeader "OCS source code setup" no
+    logHeader "OCS source code setup"
 
     if [[ -d "$OCS_BASE_PATH" ]]; then
 	logInfo "Updating OCS source code."
-	cd "$OCS_BASE_PATH"
+	pushd "$OCS_BASE_PATH" > /dev/null
 	if [[ $? -ne 0 ]]; then
-	    logError "Could not cd to OCS base path: $OCS_BASE_PATH"
-	    exit 1
+	    logError "Could not access OCS base path: $OCS_BASE_PATH"
+	    return 1
 	fi
 	execVerbose \
 	    "git pull --progress" \
 	    "git pull -q 2>&1 > /dev/null"
 	if [[ $? -ne 0 ]]; then
 	    logError "Could not update OCS from git repository."
-	    exit 1
+	    return 1
 	fi
+
+	popd > /dev/null
 	logInfo "Updating OCS source code complete."
     else
 	logInfo "Checking out OCS source code."
@@ -41,7 +77,7 @@ function ocsSourceCodeSetup() {
 	    "git clone -q https://github.com/gemini-hlsw/ocs "$OCS_BASE_PATH" 2>&1 > /dev/null"
 	if [[ $? -ne 0 ]]; then
 	    logError "Could not clone the OCS git repostitory to OCS base path: $OCS_BASE_PATH"
-	    exit 1
+	    return 1
 	fi
 	logInfo "Checking out OCS source code complete."
     fi
@@ -54,30 +90,30 @@ function ocsSourceCodeSetup() {
 function jreSbtSetup() {
     if [[ ! -d "$JRE_PATH" ]]; then
 	logError "Cannot find the JRE directory for the build: $JRE_PATH"
-	exit 1
+	return 1
     fi
     if [[ ! -f "$JRE_PATH"/osx/JRE1.8/bin/java ]]; then
 	logError "Cannot find the MacOS JRE."
 	logInfo  "Note that for MacOS, the symlink `absPath "$JRE_PATH"/osx/JRE1.8` should point to `absPath "$JRE_PATH"/osx/jre1.8.x_xx.jre/Contents/Home`."
-	exit 1
+	return 1
     fi
     if [[ ! -f "$JRE_PATH"/linux/JRE32_1.8/bin/java ]]; then
 	logError "Cannot find the Linux32 JRE."
-	exit 1
+	return 1
     fi
     if [[ ! -f "$JRE_PATH"/linux/JRE64_1.8/bin/java ]]; then
 	logError "Cannot find the Linux64 JRE."
-	exit 1
+	return 1
     fi
     if [[ ! -f "$JRE_PATH"/windows/JRE1.8/bin/java.exe ]]; then
 	logError "Cannot find the Windows JRE."
-	exit 1
+	return 1
     fi
     if [[ ! -f "$OCS_BASE_PATH"/jres.sbt ]]; then
 	echo "ocsJreDir in ThisBuild := file(\"$JRE_PATH\")" > "$OCS_BASE_PATH"/jres.sbt
 	if [[ $? -ne 0 ]]; then
 	    logError "Could not create jres.sbt file."
-	    exit 1
+	    return 1
 	fi
     fi
     return 0
@@ -96,7 +132,8 @@ function appVersionSetup() {
     local VERSION_APPSET_STRING=$3
 
     if [[ -z "$APPSET" ]]; then
-	return 0
+	logError "appVersionSetup requires an appset to be specified."
+	return 1
     fi
 
     if [[ -z "$OCS_BASE_PATH" ]]; then
@@ -116,7 +153,7 @@ function appVersionSetup() {
 	local VERSION_APPSET_TUPLE=`toOcsVersion "$VERSION_APPSET_STRING"`
 	if [[ -z "$VERSION_APPSET_TUPLE" ]]; then
 	    logError "Illegal $APPSET version string: $VERSION_APPSET_STRING"
-	    exit 1
+	    return 1
 	fi
 	verbose "$APPSET version tuple: $VERSION_APPSET_TUPLE"
 	
@@ -145,10 +182,10 @@ function ocsCredentialsSourceCodeSetup() {
     if [[ -d "$OCS_CRED_PATH" ]]; then
 	logInfo "Updating OCS credentials source code."
 	
-	cd "$OCS_CRED_PATH"
+	pushd "$OCS_CRED_PATH" > /dev/null
 	if [[ $? -ne 0 ]]; then
-	    logError "Could not cd to OCS credentials path: $OCS_CRED_PATH"
-	    exit 1
+	    logError "Could not access OCS credentials path: $OCS_CRED_PATH"
+	    return 1
 	fi
 	
 	execVerbose \
@@ -156,8 +193,10 @@ function ocsCredentialsSourceCodeSetup() {
 	    "svn up 2>&1 > /dev/null"
 	if [[ $? -ne 0 ]]; then
 	    logError "Could not update OCS credentials from svn repository."
-	    exit 1
+	    return 1
 	fi
+
+	popd > /dev/null
 	logInfo "Updating OCS credential source code complete."
     else
 	logInfo "Checking out OCS credentials source code repository."
@@ -167,7 +206,7 @@ function ocsCredentialsSourceCodeSetup() {
 	    "svn co http://source.gemini.edu/software/ocs-credentials \"$OCS_CRED_PATH\" 2>&1 > /dev/null"
 	if [[ $? -ne 0 ]]; then
 	    echo "ERROR: could not check out the svn ocs-credentials repostitory"
-	    exit 1
+	    return 1
 	fi
 	logInfo "Checking out OCS credentials source code repository complete."
     fi
@@ -179,9 +218,11 @@ function ocsCredentialsSourceCodeSetup() {
 	"\"$OCS_CRED_PATH\"/trunk/link.sh \"$OCS_BASE_PATH\" 2>&1 > /dev/null"
     if [[ $? -ne 0 ]]; then
 	echo "ERROR: could not run the OCS credentials link.sh script"
-	exit 1
+	return 1
     fi
+
     logInfo "Linking the OCS credentials to the OCS complete."
+    return 0
 }
 
 
@@ -191,11 +232,10 @@ function ocsCredentialsSourceCodeSetup() {
 function sbtCompile() {
     logHeader "Running SBT for OCS"
 
-    local OLD_PATH=`pwd`
-    cd "$OCS_BASE_PATH"
+    pushd "$OCS_BASE_PATH" > /dev/null
     if [[ $? -ne 0 ]]; then
-	logError "Could not cd to OCS base path: $OCS_BASE_PATH"
-	exit 1
+	logError "Could not access OCS base path: $OCS_BASE_PATH"
+	return 1
     fi
 
     if [[ "$1" != "TRUE" ]]; then
@@ -203,7 +243,7 @@ function sbtCompile() {
 	sbt --error clean
 	if [[ $? -ne 0 ]]; then
 	    logError "Could not run: sbt clean"
-	    exit 1
+	    return 1
 	fi
 	logInfo "Cleaning project complete."
     fi
@@ -212,9 +252,10 @@ function sbtCompile() {
     sbt --error compile
     if [[ $? -ne 0 ]]; then
 	logError "Could not run: sbt compile"
-	exit 1
+	return 1
     fi
 
-    cd "$OLD_PATH"
+    popd > /dev/null
     logInfo "Compiling project complete."
+    return 0
 }

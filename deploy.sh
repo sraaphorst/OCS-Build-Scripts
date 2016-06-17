@@ -1,11 +1,32 @@
 #!/bin/bash
 
-source appfuncs.sh
-source common.sh
-source genfuncs.sh
-source logging.sh
-source verfuncs.sh
+BASE_DIR=`dirname $0`
+source $BASE_DIR/appfuncs.sh
+source $BASE_DIR/common.sh
+source $BASE_DIR/genfuncs.sh
+source $BASE_DIR/logging.sh
+source $BASE_DIR/verfuncs.sh
+source $BASE_DIR/continuefuncs.sh
 
+# Variables and arrays used by this script, as declared in common.sh.
+VARIABLES+=(SUPPRESS_spdb VERBOSE DIRTY DIRTY_DISTROS SUPPRESS_ot SUPPRESS_qpt SUPPRESS_pit SUPPRESS_p1pdfmaker
+	    SUPPRESS_OBSCONSOLES SUPPRESS_GCONFIGS VERSION_OCS_STRING VERSION_PIT_STRING)
+ARRAYS+=(DIST_FILES_ot DIST_FILES_qpt)
+
+# *************************************************
+# ***** Check for and handle continue / abort *****
+# *************************************************
+# Note that if the script was aborted and the user opts to continue, this
+# loads up the configuration that was used in the original call to this script
+# so we can begin precisely where we left off.
+configSetup
+
+
+# ******************************************
+# ***** Handle command line parameters *****
+# ******************************************
+# Check to see if the script is fresh (i.e. did not terminate prematurely)
+# and if so, configure via the specified command line parameters.
 
 function showHelp() {
     echo "usage: deploy.sh [-h] [-v] [-d] [-b] [-NO] [-NQ] [-NP] [-NC] [-NG] [-o str] [-p str]"
@@ -23,89 +44,129 @@ function showHelp() {
     echo "   -p str:   PIT version string (e.g. 2016A.1.1.0)"
 }
 
+if configExists; then
+    # Handle the continue / abort process.
+    configInterruptedHandler "$@"
+else
+    # Fresh start: configure from the command line.
+    # Handle command line arguments.
+    while :
+    do
+	case $1 in
+	    -h) showHelp
+		exit 1
+		;;
+            -v) VERBOSE=TRUE
+		shift 
+		;;
+	    -d) DIRTY=TRUE
+		shift
+		;;
+	    -b) DIRTY_DISTROS=TRUE
+		shift
+		;;
+	    -NO) shift
+		 SUPPRESS_ot=TRUE
+		 ;;
+	    -NQ) shift
+		 SUPPRESS_qpt=TRUE
+		 ;;
+	    -NP) shift
+		 SUPPRESS_pit=TRUE
+		 SUPPRESS_p1pdfmaker=TRUE
+		 ;;
+	    -NC) shift
+		 SUPPRESS_OBSCONSOLES=TRUE
+		 ;;
+	    -NG) shift
+		 SUPPRESS_GCONFIGS=TRUE
+		 ;;
+	    -o) shift
+		VERSION_OCS_STRING=$1
+		shift
+		;;
+	    -p) shift
+		VERSION_PIT_STRING=$1
+		shift
+		;;
+            --) shift
+		break
+		;;
+            -*) showHelp
+		exit 1
+		;;
+	    *) break
+               ;;
+	esac
+    done
+    SUPPRESS_spdb=TRUE
+    
+    # There should be no more command line arguments at this point.
+    if [ $# -ne 0 ]; then
+	showHelp
+	exit 1
+    fi
 
-# Automatically suppress building SPDB since we don't care.
-SUPPRESS_spdb=TRUE
-
-# Command line arguments.
-while :
-do
-    case $1 in
-	-h) showHelp
-	    exit 1
-	    ;;
-        -v) VERBOSE=TRUE
-	    shift 
-	    ;;
-	-d) DIRTY=TRUE
-	    shift
-	    ;;
-	-b) DIRTY_DISTROS=TRUE
-	    shift
-	    ;;
-	-NO) shift
-	    SUPPRESS_ot=TRUE
-	    ;;
-	-NQ) shift
-	    SUPPRESS_qpt=TRUE
-	    ;;
-	-NP) shift
-	    SUPPRESS_pit=TRUE
-	    SUPPRESS_p1pdfmaker=TRUE
-	    ;;
-	-NC) shift
-	    SUPPRESS_OBSCONSOLES=TRUE
-	    ;;
-	-NG) shift
-	    SUPPRESS_GCONFIGS=TRUE
-	    ;;
-	-o) shift
-	    VERSION_OCS_STRING=$1
-	    shift
-	    ;;
-	-p) shift
-	    VERSION_PIT_STRING=$1
-	    shift
-	    ;;
-        --) shift
-            break
-            ;;
-        -*) showHelp
-            exit 1
-            ;;
-	 *) break
-            ;;
-    esac
-done
-
-if [ $# -ne 0 ]; then
-    showHelp
-    exit 1
+    # The process has started, so write the config file.
+    writeConfig
 fi
 
 
-# ***************************
-# ***** OCS SOURCE CODE *****
-# ***************************
-ocsSourceCodeSetup
+# *********************************
+# ***** Figure out valid apps *****
+# *********************************
+# Always do this step as it is simply a function of the configuration.
+declare -a APPSETS_VALID
+
+function validApps() {
+    if [[ -z "$SUPPRESS_ot" || -z "$SUPPRESS_qpt" ]]; then
+	APPSETS_VALID+=(OCS)
+    fi
+    if [[ -z "$SUPPRESS_pit" ]]; then
+	APPSETS_VALID+=(PIT)
+    fi
+
+    if [[ "${#APPSETS_VALID[@]}" == 0 ]]; then
+	echo "All apps suppressed. Nothing to install."
+	exit 0
+    fi
+}
+validApps
+
+# *******************
+# ***** SSH IDS *****
+# *******************
+# Always do this step as ssh ids may expire.
+sshIds
 
 
+# ************************
+# ***** JAVA VERSION *****
+# ************************
+javaVersion
 
-# *********************
-# ***** JRE SETUP *****
-# *********************
-jreSbtSetup
 
+# ******************************
+# ***** 1: OCS SOURCE CODE *****
+# ******************************
+performStep 1 ocsSourceCodeSetup
+
+
+# ************************
+# ***** 2: JRE SETUP *****
+# ************************
+performStep 2 jreSbtSetup
 
 
 # *************************
 # ***** VERSION SETUP *****
 # *************************
+# Always do this as it is simply a function of the configuration.
 function versionSetup() {
     logHeader "Processing versioning."
 
     # Process the app versions.
-    for appset in ${APPSETS_ALL[@]}; do
+    for appset in ${APPSETS_VALID[@]}; do
 	local VERSION_APPSET_VAR="VERSION_${appset}_STRING"
 	appVersionSetup "$appset" "$OCS_BASE_PATH" "${!VERSION_APPSET_VAR}"
     done
@@ -115,20 +176,20 @@ function versionSetup() {
 versionSetup
 
 
-
-# ***************************
-# ***** OCS-CREDENTIALS *****
-# ***************************
-ocsCredentialsSourceCodeSetup
-
+# ******************************
+# ***** 3: OCS-CREDENTIALS *****
+# ******************************
+performStep 3 ocsCredentialsSourceCodeSetup
 
 
-# ******************************************
-# ***** SBT PREPARATIONS AND EXECUTION *****
-# ******************************************
-sbtCompile "$DIRTY"
+# ***********************************************
+# ***** 4-5: SBT PREPARATIONS AND EXECUTION *****
+# ***********************************************
+performStep 4 sbtCompile "$DIRTY"
 
-
+# It is kind of annoying, but if buildApps fails, we will rerun the whole thing
+# instead of keeping what may have already been built. It would be overly complicated
+# to do otherwise.
 function buildApps() {
     logInfo "Creating application distributions."
     for app in ${APPS[@]}; do
@@ -152,7 +213,7 @@ function buildApps() {
 	    buildApp "$app" "$OCS_BASE_PATH"
 	    if [[ $? -ne 0 ]]; then
 		logError "Could not run buildApp."
-		exit 1
+		return 1
 	    fi
 	fi
 
@@ -160,20 +221,20 @@ function buildApps() {
 	findDistFiles "$app" "$OCS_BASE_PATH" "$VERSION"
 	if [[ $? -ne 0 ]]; then
 	    logError "Could not run findDistFiles."
-	    exit 1
+	    return 1
 	fi
     done
 
     logInfo "Creating distributions complete."
+    return 0
 }
-buildApps
+performStep 5 buildApps
 
 
 
-# ******************************
-# ***** OBS CONSOLES SETUP *****
-# ******************************
-
+# *********************************
+# ***** 6: OBS CONSOLES SETUP *****
+# *********************************
 function installObsConsoles() {
     logHeader "Installing on obs consoles."
 
@@ -195,7 +256,7 @@ function installObsConsoles() {
 	local DIST_FILE_VAR=DIST_FILE_CONSOLE_$app
 	if [[ -z "${!DIST_FILE_VAR}" ]]; then
 	    logError "Could not find $app $DIST_LINUX64 build."
-	    exit 1
+	    return 1
 	fi
 
 	# Retrieve filename from path.
@@ -226,8 +287,6 @@ echo '\${DIR}/qpt_\${VERSION}' >> bin/qpt.sh
 chmod a+x bin/qpt.sh
 "
 
-# TODO: REMOVE ECHO
-echo ${CONSOLE_SCRIPT}
     for console_server in ${CONSOLE_SERVERS[@]}; do    
 	logInfo "Setting up $CONSOLE_VERSION on $console_server"
 
@@ -235,7 +294,7 @@ echo ${CONSOLE_SCRIPT}
 	ssh "$SSH_CONNECT" "mkdir -p ${SSH_PATH}/bin" 2>&1 > /dev/null
 	if [[ $? -ne 0 ]]; then
 	    logError "Could not create path ${SSH_PATH}/bin"
-	    exit 1
+	    return 1
 	fi
 
 	# Copy the files
@@ -246,7 +305,7 @@ echo ${CONSOLE_SCRIPT}
 
 	    if [[ $? -ne 0 ]]; then
 		logError "Could not copy file ${DIST_FILE_CONSOLE_OT} to ${SSH_CONNECT}:${SSH_PATH}"
-		exit 1
+		return 1
 	    fi
 	done
 	
@@ -254,22 +313,25 @@ echo ${CONSOLE_SCRIPT}
 	ssh "$SSH_CONNECT" "$CONSOLE_SCRIPT"
 	if [[ $? -ne 0 ]]; then
 	    logError "Could not set up $console_server"
-	    exit 1
+	    return 1
 	fi
 
 	logInfo "Setting up $CONSOLE_VERSION on $console_server complete."
     done
+
     logInfo "Installing on obs consoles complete."
+    return 0
 }
+
 if [[ "$SUPPRESS_OBSCONSOLES" != "TRUE" ]]; then
-    installObsConsoles
+    performStep 6 installObsConsoles
 fi
 
 
 
-# *********************************************
-# ***** GSCONFIG / GNCONFIG DISTRIBUTIONS *****
-# *********************************************
+# ************************************************
+# ***** 7: GSCONFIG / GNCONFIG DISTRIBUTIONS *****
+# ************************************************
 
 function installDistros() {
     logHeader "Installing distributions."
@@ -301,20 +363,29 @@ function installDistros() {
 		    ssh "$SSH_CONNECT" "mkdir -p ${!SSH_PATH_VAR}" 2>&1 > /dev/null
 		    if [[ $? -ne 0 ]]; then
 			logError "Could not create ${!SSH_PATH_VAR}."
-			exit 1
+			return 1
 		    fi
 
 		    scp "$distfile" "$SSH_CONNECT":"${!SSH_PATH_VAR}" 2>&1 > /dev/null
 		    if [[ $? -ne 0 ]]; then
 			logError "Could not copy file $distfile to ${SSH_CONNECT}:${!SSH_PATH_VAR}"
-			exit 1
+			return 1
 		    fi
 		done
 	    done
 	done
     done
+
     logInfo "Installing distributions complete."
+    return 0
 }
+
 if [[ "$SUPPRESS_GCONFIGS" != "TRUE" ]]; then
-    installDistros
+    performStep 7 installDistros
 fi
+
+
+# *******************
+# ***** Cleanup *****
+# *******************
+configCleanup

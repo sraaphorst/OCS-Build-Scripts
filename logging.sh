@@ -43,14 +43,16 @@ function colorPrint() {
     if [[ "$USE_COLOR" == "TRUE" ]]; then
 	printf "$COLOR_NONE"
     fi
+    return 0
 }
 
 # Header logging: if a second param is given, no leading newline.
 function logHeader() {
-    if [ -z "$2" ]; then
+    if [[ -z "$2" ]]; then
 	printf "\n"
     fi
     colorPrint "[ $1 ]\n" "$COLOR_HEADER"
+    return 0
 }
 
 # Internal function for printing out log categories.
@@ -58,21 +60,25 @@ function logCat() {
     printf "["
     colorPrint "$1" "$2"
     printf "]"
+    return 0
 }
 
 function logInfo() {
     logCat "info" "$COLOR_INFO"
     echo "  $@"
+    return 0
 }
 
 function logWarn() {
     logCat "warn" "$COLOR_WARN"
     echo "  $@"
+    return 0
 }
 
 function logError() {
     logCat "error" "$COLOR_ERROR"
     echo " $@"
+    return 0
 }
 
 # If the variable VERBOSE is set to TRUE, then output a message; otherwise do nothing.
@@ -81,6 +87,7 @@ function verbose() {
 	logCat "vinfo" "$COLOR_VINFO"
 	echo " $@"
     fi
+    return 0
 }
 
 # Run one of two commands depending on whether verbosity is selected.
@@ -91,4 +98,5 @@ function execVerbose() {
     else
 	eval "$2"
     fi
+    return $?
 }

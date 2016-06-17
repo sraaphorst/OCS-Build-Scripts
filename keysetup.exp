@@ -19,8 +19,8 @@ proc checkPassword { password msg exitCode } {
 	exit $exitCode
     }
 }
-checkPassword $telopsPassword   "telops password must be filled out in keysetup.exp."  1
-checkPassword $softwarePassword "software password must be filled out in keysetup.exp" 2
+checkPassword $telopsPassword   "telops password must be filled out in keysetup.exp.\n"  1
+checkPassword $softwarePassword "software password must be filled out in keysetup.exp.\n" 2
 
 
 proc sshCopyID { username password server } {
@@ -28,9 +28,9 @@ proc sshCopyID { username password server } {
     spawn ssh-copy-id $username@$server
     expect {
 	timeout     { send_user "Failed to get password prompt.\n"; exit 3 }
-	eof         { send_user "ssh failure\n"; exit 4 }
+	eof         { send_user "SSH failure\n"; exit 4 }
 	"*password" { send "$password\r" }
-	"*system."  { send_user "ssh id is already configured.\n" }
+	"*system."  { send_user "SSH ID is already configured.\n" }
 	"Warning*"  { send_user "RSA host key differs from key for IP address. Please fix this and rerun.\n"; exit 5 }
     }
 }
