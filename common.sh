@@ -3,6 +3,7 @@
 
 BASE_DIR=`dirname $0`
 source $BASE_DIR/genfuncs.sh
+source $BASE_DIR/jdkfuncs.sh
 source $BASE_DIR/logging.sh
 source $BASE_DIR/verfuncs.sh
 
