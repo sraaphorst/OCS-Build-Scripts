@@ -154,7 +154,7 @@ function appVersionSetup() {
 	local VERSION_APPSET_TUPLE=`toOcsVersion "$VERSION_APPSET_STRING"`
 	if [[ -z "$VERSION_APPSET_TUPLE" ]]; then
 	    logError "Illegal $APPSET version string: $VERSION_APPSET_STRING"
-	    return 1
+	    exit 1
 	fi
 	verbose "$APPSET version tuple: $VERSION_APPSET_TUPLE"
 	
