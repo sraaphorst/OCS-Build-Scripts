@@ -112,7 +112,7 @@ else
     done
 
     if [[ -z ${SERVERS[@]} ]]; then
-	SERVERS=(gsodbtest2 gnodbtest2)
+	SERVERS=(gsodbtest gnodbtest)
 	DISTS=(gsodbtest gnodbtest)
 	SOURCE_SERVERS=(gsodb gnodb)
 	MOUNT_POINTS=(petrohue wikiwiki)

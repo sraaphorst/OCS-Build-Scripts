@@ -5,7 +5,7 @@ source [file join [file dirname [info script]] passwords.exp]
 
 # *** telops account information ***
 set telopsUser "telops"
-set telopsServers { "gsconfig" "gnconfig" "sbftopsdev-ld1" "hbfcon03" }
+set telopsServers { "gsconfig" "gnconfig" "sbfcontest" "hbfcon03" }
 if {![info exists telopsPassword]} {
     send_user "telopsPassword must be set in passwords.exp\n"
     exit 1
@@ -13,7 +13,7 @@ if {![info exists telopsPassword]} {
 
 # *** software account information ***
 set softwareUser "software"
-set softwareServers { "gsodbtest2" "gnodbtest2" "gsodb" "gnodb" }
+set softwareServers { "gsodbtest" "gnodbtest" "gsodb" "gnodb" }
 if {![info exists softwarePassword]} {
     send_user "softwarePassword must be set in passwords.exp\n"
     exit 2
