@@ -270,13 +270,14 @@ function processServer() {
 	return 1
     fi
 
-    local SERVER_STEP=$(($SERVER_NUMBER * 6))
+    local SERVER_STEP=$(($SERVER_NUMBER * 7))
     performStep $(($SERVER_STEP + 6)) copyDist "$SERVER" "$DIST"
     performStep $(($SERVER_STEP + 7)) fetchLatestBackup "$SERVER" "$SOURCE_SERVER" "$MOUNT_POINT"
     performStep $(($SERVER_STEP + 8)) stopServer "$SERVER"
     performStep $(($SERVER_STEP + 9)) setupKeys "$SERVER"
     performStep $(($SERVER_STEP + 10)) startServer "$SERVER"
     performStep $(($SERVER_STEP + 11)) importXml "$SERVER"
+    performStep $(($SERVER_STEP + 12)) deleteLatestBackup "$SERVER"
     return 0
 }
 
@@ -534,6 +535,33 @@ function importXml() {
     fi
 
     logInfo "Importing XML backup complete."
+    return 0
+}
+
+# SSH to the server and remove the XML backup dump.
+# This is to attempt to reduce the constant issue of the test ODBs running out of available space
+# Parameters required:
+# 1. The name of the server.
+function deleteLatestBackup() {
+    local SERVER="$1"
+    if [[ -z "$SERVER" ]]; then
+	logError "deleteLatestBackup: requires a server name."
+	return 1
+    fi
+
+    # Make sure that the BACKUP_PATH is set and exists.
+    if [[ -z "$BACKUP_PATH" ]]; then
+	logWarning "deleteLatestBackup: BACKUP_PATH variable not set. Cannot cleean up."
+	return 1
+    fi
+
+    ssh -f "$SSH_CONNECT" "if [[ -d \"$BACKUP_PATH\" ]]; then exit 0; else exit 1; fi"
+    if [[ "$?" == 1 ]]; then
+	logWarning "deleteLatestBackup: $BACKUP_PATH is not a directory. Cannot remove it."
+	return 1
+    fi
+
+    ssh -f "$SSH_CONNECT" "rm -rf \"$BACKUP_PATH\""
     return 0
 }
 
