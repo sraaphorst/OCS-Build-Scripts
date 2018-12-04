@@ -510,8 +510,8 @@ function startServer() {
     fi
 
     # We need to wait long enough for the database to come up.
-    logInfo "Waiting 60 seconds for $SERVER to complete startup."
-    sleep 60
+    logInfo "Waiting 120 seconds for $SERVER to complete startup."
+    sleep 120
     logInfo "Attempting to start server $SERVER complete."
     return 0
 }
@@ -555,12 +555,13 @@ function deleteLatestBackup() {
 	return 1
     fi
 
+    local SSH_CONNECT="${SSH_USER}@${SERVER}"
     ssh -f "$SSH_CONNECT" "if [[ -d \"$BACKUP_PATH\" ]]; then exit 0; else exit 1; fi"
-    if [[ "$?" == 1 ]]; then
+    if [[ "$?" != 0 ]]; then
 	logWarning "deleteLatestBackup: $BACKUP_PATH is not a directory. Cannot remove it."
 	return 1
     fi
-
+    verbose "Deleting backup dump used in import: ${SSH_CONNECT}:${BACKUP_PATH}"
     ssh -f "$SSH_CONNECT" "rm -rf \"$BACKUP_PATH\""
     return 0
 }
