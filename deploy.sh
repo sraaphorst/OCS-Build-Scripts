@@ -239,7 +239,7 @@ function installObsConsoles() {
     logHeader "Installing on obs consoles."
 
     local CONSOLE_USER=telops
-    local CONSOLE_SERVERS=(sbfcon02 hbfcon03)
+    local CONSOLE_SERVERS=(sbfcontest hbfcon03)
     local CONSOLE_VERSION=`echo $VERSION_OCS | sed "s/\..*//"`
     local SSH_PATH="perm/$CONSOLE_VERSION"
 

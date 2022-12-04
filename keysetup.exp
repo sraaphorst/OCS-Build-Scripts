@@ -1,35 +1,37 @@
 #!/usr/bin/env expect
 
-# *** FILL OUT TELOPS PASSWORD ***
-set telopsUser "telops"
-set telopsPassword ""
-set telopsServers { "gsconfig" "gnconfig" "sbfcon02" "hbfcon03" }
+# *** YOU MUST ENTER PASSWORDS IN passwords.exp BEFORE RUNNING THIS SCRIPT ***
+source [file join [file dirname [info script]] passwords.exp]
 
-# *** FILL OUT SOFTWARE PASSWORD ***
+# *** telops account information ***
+set telopsUser "telops"
+set telopsServers { "gsconfig" "gnconfig" "sbfcontest" "hbfcon03" }
+if {![info exists telopsPassword]} {
+    send_user "telopsPassword must be set in passwords.exp\n"
+    exit 1
+}
+
+# *** software account information ***
 set softwareUser "software"
-set softwarePassword ""
-set softwareServers { "gsodbtest2" "gnodbtest2" "gsodb" "gnodb" }
+set softwareServers { "gsodbtest" "gnodbtest" "gsodb" "gnodb" }
+if {![info exists softwarePassword]} {
+    send_user "softwarePassword must be set in passwords.exp\n"
+    exit 2
+}
+
 
 set timeout 30
 log_user 0
 
-proc checkPassword { password msg exitCode } {
-    if {$password eq ""} {
-	send_user $msg
-	exit $exitCode
-    }
-}
-checkPassword $telopsPassword   "telops password must be filled out in keysetup.exp.\n"  1
-checkPassword $softwarePassword "software password must be filled out in keysetup.exp.\n" 2
-
-
 proc sshCopyID { username password server } {
     send_user "Attempting to set up key for ${username}@${server}...\n"
+    spawn ssh-keygen -R $server
     spawn ssh-copy-id $username@$server
     expect {
 	timeout     { send_user "Failed to get password prompt.\n"; exit 3 }
 	eof         { send_user "SSH failure\n"; exit 4 }
-	"*password" { send "$password\r" }
+	"continue" { send "yes\n"; exp_continue }
+	"assword:" { send "$password\r" }
 	"*system."  { send_user "SSH ID is already configured.\n" }
 	"Warning*"  { send_user "RSA host key differs from key for IP address. Please fix this and rerun.\n"; exit 5 }
     }

@@ -134,12 +134,12 @@ function appVersionSetup() {
 
     if [[ -z "$APPSET" ]]; then
 	logError "appVersionSetup requires an appset to be specified."
-	return 1
+	exit 1
     fi
 
     if [[ -z "$OCS_BASE_PATH" ]]; then
 	logError "appVersionSetup requires OCS base path to be specified."
-	return 1
+	exit 1
     fi
     local BUILD_FILE_SRC="$OCS_BASE_PATH"/build.sbt
     local BUILD_FILE_DST="$OCS_BASE_PATH"/build_tmp.sbt
@@ -154,7 +154,7 @@ function appVersionSetup() {
 	local VERSION_APPSET_TUPLE=`toOcsVersion "$VERSION_APPSET_STRING"`
 	if [[ -z "$VERSION_APPSET_TUPLE" ]]; then
 	    logError "Illegal $APPSET version string: $VERSION_APPSET_STRING"
-	    return 1
+	    exit 1
 	fi
 	verbose "$APPSET version tuple: $VERSION_APPSET_TUPLE"
 	

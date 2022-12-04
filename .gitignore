@@ -1,0 +1,8 @@
+# passwords
+passwords.exp
+
+# Any temp zip files that end up here.
+*.zip
+
+# Failed build configurations.
+*.cfg
