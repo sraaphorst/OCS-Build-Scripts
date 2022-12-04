@@ -1,4 +1,4 @@
-## OCS build and deployment scripts.
+## OCS Build and Deployment Scripts
 
 * This package consists of a selection of scripts used to build and deploy the OCS project from the OCS build machine for Gemini Observatory.
 * It allows stopping and restarting the build at any stage in the process.
